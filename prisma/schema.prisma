@@ -1,0 +1,472 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── ENUMS ───────────────────────────────
+
+enum Role {
+  B2C
+  B2B
+  VENDOR
+  GOVT
+  ADMIN
+  SALES
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum OrderType {
+  B2C
+  B2B
+  RFQ
+  TENDER
+  RATE_CONTRACT
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  COD_PENDING
+}
+
+enum RfqStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  QUOTED
+  NEGOTIATING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum TenderStatus {
+  DRAFT
+  SUBMITTED
+  MATCHED
+  QUOTED
+  WON
+  LOST
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  MAKE_TO_ORDER
+}
+
+// ─── USER ────────────────────────────────
+
+model User {
+  id            String     @id @default(cuid())
+  email         String?    @unique
+  phone         String?    @unique
+  passwordHash  String?
+  role          Role       @default(B2C)
+  firstName     String?
+  lastName      String?
+  companyName   String?
+  gstin         String?    @unique
+  pan           String?
+  kycStatus     KycStatus  @default(PENDING)
+  creditLimit   Float      @default(0)
+  creditUsed    Float      @default(0)
+  isActive      Boolean    @default(true)
+  emailVerified Boolean    @default(false)
+  phoneVerified Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  rfqs          Rfq[]
+  tenders       Tender[]
+  wishlist      Wishlist[]
+  reviews       Review[]
+  vendor        Vendor?
+  cart          Cart?
+
+  @@map("users")
+}
+
+// ─── ADDRESS ─────────────────────────────
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String?
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  pincode    String
+  gstin      String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  orders     Order[]
+
+  @@map("addresses")
+}
+
+// ─── CATEGORY ────────────────────────────
+
+model Category {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  description  String?
+  iconUrl      String?
+  imageUrl     String?
+  parentId     String?
+  level        Int        @default(1)
+  isFeatured   Boolean    @default(false)
+  isActive     Boolean    @default(true)
+  sortOrder    Int        @default(0)
+  metaTitle    String?
+  metaDesc     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  parent       Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[] @relation("CategoryTree")
+  products     Product[]
+
+  @@map("categories")
+}
+
+// ─── BRAND ───────────────────────────────
+
+model Brand {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  logoUrl     String?
+  description String?
+  isActive    Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  products    Product[]
+
+  @@map("brands")
+}
+
+// ─── PRODUCT ─────────────────────────────
+
+model Product {
+  id              String      @id @default(cuid())
+  name            String
+  slug            String      @unique
+  sku             String      @unique
+  brandId         String?
+  categoryId      String?
+  description     String?
+  richDescription String?
+  specs           Json?
+  hsnCode         String?
+  gstRate         Float       @default(18)
+  isGemListed     Boolean     @default(false)
+  isFeatured      Boolean     @default(false)
+  isActive        Boolean     @default(true)
+  certifications  String[]
+  tags            String[]
+  metaTitle       String?
+  metaDesc        String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  brand           Brand?      @relation(fields: [brandId], references: [id])
+  category        Category?   @relation(fields: [categoryId], references: [id])
+  variants        ProductVariant[]
+  images          ProductImage[]
+  reviews         Review[]
+  wishlist        Wishlist[]
+  orderItems      OrderItem[]
+
+  @@map("products")
+}
+
+// ─── PRODUCT VARIANT ─────────────────────
+
+model ProductVariant {
+  id           String      @id @default(cuid())
+  productId    String
+  variantName  String?
+  sku          String      @unique
+  attributes   Json?
+  mrp          Float
+  b2cPrice     Float
+  b2bPrice     Float?
+  moq          Int         @default(1)
+  stock        Int         @default(0)
+  stockStatus  StockStatus @default(IN_STOCK)
+  weight       Float?
+  dimensions   Json?
+  imageUrl     String?
+  isDefault    Boolean     @default(false)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  product      Product     @relation(fields: [productId], references: [id])
+  pricingTiers PricingTier[]
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+
+  @@map("product_variants")
+}
+
+// ─── PRODUCT IMAGE ────────────────────────
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@map("product_images")
+}
+
+// ─── PRICING TIER ─────────────────────────
+
+model PricingTier {
+  id          String   @id @default(cuid())
+  variantId   String
+  minQty      Int
+  maxQty      Int?
+  price       Float
+  discountPct Float?
+  validFrom   DateTime @default(now())
+  validTo     DateTime?
+
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@map("pricing_tiers")
+}
+
+// ─── CART ────────────────────────────────
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  variantId String
+  quantity  Int
+  createdAt DateTime       @default(now())
+
+  cart      Cart           @relation(fields: [cartId], references: [id])
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@map("cart_items")
+}
+
+// ─── ORDER ───────────────────────────────
+
+model Order {
+  id              String        @id @default(cuid())
+  userId          String
+  addressId       String?
+  orderType       OrderType     @default(B2C)
+  status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  subtotal        Float
+  gstAmount       Float
+  shippingCharge  Float         @default(0)
+  discount        Float         @default(0)
+  totalAmount     Float
+  poNumber        String?
+  gstin           String?
+  notes           String?
+  paymentId       String?
+  paymentMethod   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user            User          @relation(fields: [userId], references: [id])
+  address         Address?      @relation(fields: [addressId], references: [id])
+  items           OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String         @id @default(cuid())
+  orderId    String
+  productId  String
+  variantId  String
+  quantity   Int
+  unitPrice  Float
+  gstRate    Float
+  gstAmount  Float
+  totalPrice Float
+
+  order      Order          @relation(fields: [orderId], references: [id])
+  product    Product        @relation(fields: [productId], references: [id])
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@map("order_items")
+}
+
+// ─── RFQ ─────────────────────────────────
+
+model Rfq {
+  id               String    @id @default(cuid())
+  userId           String
+  rfqNumber        String    @unique @default(cuid())
+  items            Json
+  requirementsText String?
+  deliveryLocation String?
+  requiredByDate   DateTime?
+  gstin            String?
+  status           RfqStatus @default(SUBMITTED)
+  assignedSalesId  String?
+  quotedAmount     Float?
+  salesNotes       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@map("rfqs")
+}
+
+// ─── TENDER ──────────────────────────────
+
+model Tender {
+  id               String       @id @default(cuid())
+  userId           String
+  tenderNumber     String?
+  issuingAuthority String?
+  docUrl           String?
+  deadline         DateTime?
+  status           TenderStatus @default(DRAFT)
+  matchedProducts  Json?
+  complianceDocs   String[]
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user             User         @relation(fields: [userId], references: [id])
+
+  @@map("tenders")
+}
+
+// ─── VENDOR ──────────────────────────────
+
+model Vendor {
+  id               String       @id @default(cuid())
+  userId           String       @unique
+  companyName      String
+  gstCertUrl       String?
+  isoCertUrl       String?
+  panUrl           String?
+  commissionRate   Float        @default(5)
+  settlementCycle  Int          @default(30)
+  approvalStatus   VendorStatus @default(PENDING)
+  approvedAt       DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user             User         @relation(fields: [userId], references: [id])
+
+  @@map("vendors")
+}
+
+// ─── REVIEW ──────────────────────────────
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String
+  rating     Int
+  title      String?
+  body       String?
+  isVerified Boolean  @default(false)
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@map("reviews")
+}
+
+// ─── WISHLIST ────────────────────────────
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+
+  @@map("wishlists")
+}
+
+// ─── COUPON ──────────────────────────────
+
+model Coupon {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  type         String
+  value        Float
+  minOrderAmt  Float     @default(0)
+  userSegment  Role?
+  usageLimit   Int?
+  usedCount    Int       @default(0)
+  expiresAt    DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  @@map("coupons")
+}
