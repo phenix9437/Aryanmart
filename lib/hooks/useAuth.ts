@@ -21,22 +21,9 @@ export type AuthUser = {
   };
 };
 
-function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`)
-  );
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function resolveClientToken(): string | null {
-  return getCookie('auth_token') || localStorage.getItem('auth_token');
-}
-
 export function useAuth() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,21 +32,18 @@ export function useAuth() {
 
     async function loadUser() {
       try {
-        const clientToken = resolveClientToken();
         const response = await apiClient<{ success: boolean; user: AuthUser }>(
           '/auth/me',
-          clientToken ? { token: clientToken } : { useCredentials: true }
+          { useCredentials: true }
         );
 
         if (!cancelled) {
           setUser(response.user);
-          setToken(clientToken);
           setError(null);
         }
       } catch (err) {
         if (!cancelled) {
           setUser(null);
-          setToken(null);
           setError(err instanceof Error ? err.message : 'Failed to load user');
         }
       } finally {
@@ -80,18 +64,15 @@ export function useAuth() {
     try {
       await apiClient('/auth/logout', {
         method: 'POST',
-        token: token ?? undefined,
         useCredentials: true,
       });
     } catch {
-      // Still clear local state even if the request fails.
+      // Clear local state even if request fails
     } finally {
-      localStorage.removeItem('auth_token');
       setUser(null);
-      setToken(null);
       router.push('/login');
     }
-  }, [router, token]);
+  }, [router]);
 
-  return { user, token, isLoading, error, logout };
+  return { user, isLoading, error, logout };
 }

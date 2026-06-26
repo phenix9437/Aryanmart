@@ -3,10 +3,42 @@ import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth-helpers';
 import { handleApiError } from '@/lib/apiError';
 import logger from '@/lib/logger';
-import {
-  generateUniqueSlug,
-} from '@/lib/admin-helpers';
+import { generateUniqueSlug } from '@/lib/admin-helpers';
 import { validateCategoryInput } from '@/lib/validators/admin';
+
+export async function GET(request: Request) {
+  try {
+    await requireRole(request, ['ADMIN', 'SALES']);
+    const { searchParams } = new URL(request.url);
+    const flat = searchParams.get('flat') === 'true';
+
+    // Fetch all categories with parent info and product count
+    const categories = await prisma.category.findMany({
+      include: {
+        _count: { select: { products: true, children: true } },
+      },
+      orderBy: [{ level: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    if (flat) {
+      return NextResponse.json({ success: true, data: categories });
+    }
+
+    // Build tree: L1 with nested children
+    const l1 = categories.filter((c) => !c.parentId);
+    const tree = l1.map((parent) => ({
+      ...parent,
+      children: categories.filter((c) => c.parentId === parent.id),
+    }));
+
+    return NextResponse.json({ success: true, data: tree });
+  } catch (error) {
+    return handleApiError(error, {
+      path: '/api/admin/categories',
+      method: 'GET',
+    });
+  }
+}
 
 export async function POST(request: Request) {
   try {

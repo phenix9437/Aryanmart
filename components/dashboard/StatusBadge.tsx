@@ -2,7 +2,6 @@ import { cn } from '@/lib/utils';
 
 interface StatusBadgeProps {
   status: string;
-  variant?: 'order' | 'rfq' | 'tender' | 'vendor' | 'stock';
 }
 
 const SUCCESS_STATUSES = new Set([
@@ -58,9 +57,7 @@ function getStatusClasses(status: string) {
   return 'bg-primary/10 text-primary';
 }
 
-export function StatusBadge({ status, variant = 'order' }: StatusBadgeProps) {
-  void variant;
-
+export function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <span
       className={cn(

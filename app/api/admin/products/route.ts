@@ -7,6 +7,74 @@ import logger from '@/lib/logger';
 import { generateUniqueSlug } from '@/lib/admin-helpers';
 import { validateProductInput } from '@/lib/validators/admin';
 import { computeStockStatus } from '@/lib/pricing';
+import {
+  buildPaginationMeta,
+  parsePaginationParams,
+} from '@/lib/validators/pagination';
+
+export async function GET(request: Request) {
+  try {
+    await requireRole(request, ['ADMIN', 'SALES']);
+    const { searchParams } = new URL(request.url);
+    const { page, limit, skip } = parsePaginationParams(searchParams);
+
+    const search = searchParams.get('search') ?? '';
+    const categoryId = searchParams.get('categoryId') ?? '';
+    const brandId = searchParams.get('brandId') ?? '';
+    const activeOnly = searchParams.get('active') === 'true';
+
+    const where: Prisma.ProductWhereInput = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
+        { hsnCode: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (categoryId) where.categoryId = categoryId;
+    if (brandId) where.brandId = brandId;
+    if (activeOnly) where.isActive = true;
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          brand: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
+          variants: {
+            where: { isDefault: true },
+            select: {
+              id: true,
+              sku: true,
+              mrp: true,
+              b2cPrice: true,
+              stock: true,
+              stockStatus: true,
+            },
+            take: 1,
+          },
+          _count: { select: { variants: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: products,
+      meta: buildPaginationMeta(total, page, limit),
+    });
+  } catch (error) {
+    return handleApiError(error, {
+      path: '/api/admin/products',
+      method: 'GET',
+    });
+  }
+}
 
 export async function POST(request: Request) {
   try {

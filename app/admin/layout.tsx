@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
+  Tag,
   Users,
 } from 'lucide-react';
 import { DashboardShell, type NavItem } from '@/components/dashboard/DashboardShell';
@@ -22,6 +23,7 @@ const adminNavItems: NavItem[] = [
   { label: 'RFQs', href: '/admin/rfqs', icon: FileText },
   { label: 'Tenders', href: '/admin/tenders', icon: Award },
   { label: 'Vendors', href: '/admin/vendors', icon: Users },
+  { label: 'Brands', href: '/admin/brands', icon: Tag },
 ];
 
 export default function AdminLayout({
